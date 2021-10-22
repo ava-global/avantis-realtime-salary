@@ -8,11 +8,30 @@ use spl_token::instruction::AuthorityType;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
+const SALARY_VAULT_PDA_SEED: &[u8] = b"salary_vault_authority";
+
 #[program]
 pub mod avantis_realtime_salary {
     use super::*;
-    pub fn initialize(ctx: Context<Initialize>) -> ProgramResult {
+    pub fn initialize(ctx: Context<Initialize>, _salary_vault_account_bump: u8) -> ProgramResult {
+        // Transfer ownership of Salary's Vault to program
+        let (salary_vault_authority, _bump) =
+            Pubkey::find_program_address(&[SALARY_VAULT_PDA_SEED], ctx.program_id);
+
+        token::set_authority(
+            ctx.accounts.into_set_authority_context(),
+            AuthorityType::AccountOwner,
+            Some(salary_vault_authority),
+        )?;
         Ok(())
+    }
+
+    pub fn add_employee(ctx: Context<AddEmployee>) -> ProgramResult {
+        unimplemented!();
+    }
+
+    pub fn claim_salary(ctx: Context<ClaimSalary>) -> ProgramResult {
+        unimplemented!();
     }
 }
 
@@ -24,18 +43,28 @@ pub struct Initialize<'info> {
 
     #[account(
         init,
-        seeds = [b"salary_vault_account".as_ref()],
+        seeds = [ b"salary_vault_account".as_ref()],
         bump = salary_vault_account_bump,
         payer = initializer,
         token::mint = mint,
         token::authority = initializer,
     )]
     pub vault_account: Account<'info, TokenAccount>,
-    pub token_account: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
     pub mint: Account<'info, Mint>,
+}
+
+impl<'info> Initialize<'info> {
+    fn into_set_authority_context(&self) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
+        let cpi_accounts = SetAuthority {
+            account_or_mint: self.vault_account.to_account_info().clone(),
+            current_authority: self.initializer.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
 }
 
 #[derive(Accounts)]
