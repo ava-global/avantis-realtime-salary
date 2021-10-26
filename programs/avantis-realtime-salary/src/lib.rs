@@ -5,6 +5,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, Transfer};
 use anchor_spl::token::{Mint, SetAuthority, TokenAccount};
 use spl_token::instruction::AuthorityType;
+use spl_token::solana_program::clock::UnixTimestamp;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -26,8 +27,13 @@ pub mod avantis_realtime_salary {
         Ok(())
     }
 
-    pub fn add_employee(ctx: Context<AddEmployee>) -> ProgramResult {
-        unimplemented!();
+    pub fn add_employee(ctx: Context<AddEmployee>, daily_rate: u64, _bump: u8) -> ProgramResult {
+        ctx.accounts.employee_salary_state.daily_rate = daily_rate;
+        ctx.accounts.employee_salary_state.employee_pubkey = *ctx.accounts.employee.key;
+        ctx.accounts.employee_salary_state.employee_token_account = ctx.accounts.employee_token_account.key();
+        ctx.accounts.employee_salary_state.last_claimed_timestamp = Clock::get()?.unix_timestamp;
+
+        Ok(())
     }
 
     pub fn claim_salary(ctx: Context<ClaimSalary>) -> ProgramResult {
@@ -70,8 +76,8 @@ impl<'info> Initialize<'info> {
 #[derive(Accounts)]
 #[instruction(daily_rate: u64, bump: u8)]
 pub struct AddEmployee<'info> {
+    #[account(mut)]
     pub adder: Signer<'info>,
-
     #[account(
         init,
         seeds = [employee.key.as_ref()],
@@ -91,7 +97,7 @@ pub struct EmployeeSalaryState {
     pub employee_pubkey: Pubkey,
     pub employee_token_account: Pubkey,
     pub daily_rate: u64,
-    pub last_claimed_timestamp: u64,
+    pub last_claimed_timestamp: i64,
 }
 
 #[derive(Accounts)]

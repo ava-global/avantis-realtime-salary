@@ -15,11 +15,15 @@ describe('avantis-realtime-salary', () => {
   anchor.setProvider(provider);
 
   const program = anchor.workspace.AvantisRealtimeSalary;
+  const mintAccountKeypair = anchor.web3.Keypair.generate();
+  const initilizerKeypair = anchor.web3.Keypair.generate();
+  const employee1Keypair = anchor.web3.Keypair.generate();
+  const employee2Keypair = anchor.web3.Keypair.generate();
+
+  let mintAccount;
 
   it('Is initialized!', async () => {
 
-    const mintAccountKeypair = anchor.web3.Keypair.generate();
-    const initilizerKeypair = anchor.web3.Keypair.generate();
 
     await provider.connection.confirmTransaction(
       await provider.connection.requestAirdrop(initilizerKeypair.publicKey, 10000000000),
@@ -27,7 +31,7 @@ describe('avantis-realtime-salary', () => {
     );
 
 
-    const mintAccount = await Token.createMint(
+    mintAccount = await Token.createMint(
       provider.connection,
       initilizerKeypair,
       mintAccountKeypair.publicKey,
@@ -68,5 +72,39 @@ describe('avantis-realtime-salary', () => {
     );
 
     assert.ok(salaryVault.owner.equals(salaryVaultAuthorityPDA));
+  });
+
+  it('Add Employee should save correct state', async () => {
+
+
+    const [salaryStatePDA, salaryStatePDABump] = await PublicKey.findProgramAddress(
+        [employee1Keypair.publicKey.toBuffer()],
+        program.programId
+    );
+
+    employee1TokenAccount = await mintAccount.createAccount(employee1Keypair.publicKey);
+
+    const daily_rate = new anchor.BN(1000);
+    const tx = await program.rpc.addEmployee(
+        daily_rate, salaryStatePDABump,
+        {
+          accounts: {
+            adder: initilizerKeypair.publicKey,
+            employeeSalaryState: salaryStatePDA,
+            employeeTokenAccount: employee1TokenAccount,
+            employee: employee1Keypair.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          },
+          signers: [initilizerKeypair],
+        }
+    );
+
+    let employee1SalaryStateAccount = await program.account.employeeSalaryState.fetch(
+        salaryStatePDA
+    );
+
+    assert.equal(employee1SalaryStateAccount.dailyRate, 1000);
+
   });
 });
