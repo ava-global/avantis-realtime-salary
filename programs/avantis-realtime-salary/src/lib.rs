@@ -30,14 +30,34 @@ pub mod avantis_realtime_salary {
     pub fn add_employee(ctx: Context<AddEmployee>, daily_rate: u64, _bump: u8) -> ProgramResult {
         ctx.accounts.employee_salary_state.daily_rate = daily_rate;
         ctx.accounts.employee_salary_state.employee_pubkey = *ctx.accounts.employee.key;
-        ctx.accounts.employee_salary_state.employee_token_account = ctx.accounts.employee_token_account.key();
-        ctx.accounts.employee_salary_state.last_claimed_timestamp = Clock::get()?.unix_timestamp;
+        ctx.accounts.employee_salary_state.employee_token_account =
+            ctx.accounts.employee_token_account.key();
+        ctx.accounts.employee_salary_state.last_claimed_timestamp =
+            Clock::get()?.unix_timestamp as u64; // Better way to cast numeric?
 
         Ok(())
     }
 
     pub fn claim_salary(ctx: Context<ClaimSalary>) -> ProgramResult {
-        unimplemented!();
+        let claimer_salary_state = &mut ctx.accounts.employee_salary_state;
+        let claimable_amount = calculate_claimable_amount(
+            claimer_salary_state.daily_rate,
+            claimer_salary_state.last_claimed_timestamp,
+            Clock::get()?.unix_timestamp as u64,
+        );
+
+        let (_vault_authority, vault_authority_bump) =
+            Pubkey::find_program_address(&[SALARY_VAULT_PDA_SEED], ctx.program_id);
+        let vault_authority_seed = &[&SALARY_VAULT_PDA_SEED[..], &[vault_authority_bump]];
+
+        token::transfer(
+            ctx.accounts
+                .into_transfer_to_claimer_context()
+                .with_signer(&[&vault_authority_seed[..]]),
+            claimable_amount,
+        )?;
+
+        Ok(())
     }
 }
 
@@ -97,13 +117,38 @@ pub struct EmployeeSalaryState {
     pub employee_pubkey: Pubkey,
     pub employee_token_account: Pubkey,
     pub daily_rate: u64,
-    pub last_claimed_timestamp: i64,
+    pub last_claimed_timestamp: u64,
 }
 
 #[derive(Accounts)]
 pub struct ClaimSalary<'info> {
     pub claimer: Signer<'info>,
     pub employee_token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
     pub vault_account: Account<'info, TokenAccount>,
-    pub pool_vault_authority: AccountInfo<'info>,
+    #[account(
+        mut,
+        constraint = employee_salary_state.employee_pubkey == *claimer.key
+    )]
+    pub employee_salary_state: Account<'info, EmployeeSalaryState>,
+    pub vault_authority: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+impl<'info> ClaimSalary<'info> {
+    fn into_transfer_to_claimer_context(&self) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.vault_account.to_account_info().clone(),
+            to: self.employee_token_account.to_account_info().clone(),
+            authority: self.vault_authority.clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+}
+
+pub fn calculate_claimable_amount(daily_rate: u64, last_claimed_timestamp: u64, now: u64) -> u64 {
+    let ts_diff = now - last_claimed_timestamp;
+    let total_days = ts_diff / (24 * 60 * 60);
+    daily_rate * total_days
 }
