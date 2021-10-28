@@ -33,17 +33,21 @@ pub mod avantis_realtime_salary {
         ctx.accounts.employee_salary_state.employee_token_account =
             ctx.accounts.employee_token_account.key();
         ctx.accounts.employee_salary_state.last_claimed_timestamp =
-            Clock::get()?.unix_timestamp as u64; // Better way to cast numeric?
+            Clock::get()?.unix_timestamp as u64; // Any better way to cast to numeric?
 
         Ok(())
     }
 
     pub fn claim_salary(ctx: Context<ClaimSalary>) -> ProgramResult {
         let claimer_salary_state = &mut ctx.accounts.employee_salary_state;
+        let now = Clock::get()?.unix_timestamp as u64;
+
+        claimer_salary_state.last_claimed_timestamp = now;
+
         let claimable_amount = calculate_claimable_amount(
             claimer_salary_state.daily_rate,
             claimer_salary_state.last_claimed_timestamp,
-            Clock::get()?.unix_timestamp as u64,
+            now,
         );
 
         let (_vault_authority, vault_authority_bump) =
@@ -148,7 +152,8 @@ impl<'info> ClaimSalary<'info> {
 }
 
 pub fn calculate_claimable_amount(daily_rate: u64, last_claimed_timestamp: u64, now: u64) -> u64 {
-    let ts_diff = now - last_claimed_timestamp;
-    let total_days = ts_diff / (24 * 60 * 60);
-    daily_rate * total_days
+    let sec_diff = now - last_claimed_timestamp;
+    // Should we use spl math ?
+    let amount_per_sec = daily_rate / (24 * 60 * 60);
+    sec_diff * amount_per_sec
 }
