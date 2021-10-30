@@ -75,8 +75,6 @@ describe('avantis-realtime-salary', () => {
   });
 
   it('Add Employee should save correct state', async () => {
-
-
     const [salaryStatePDA, salaryStatePDABump] = await PublicKey.findProgramAddress(
         [employee1Keypair.publicKey.toBuffer()],
         program.programId
@@ -107,4 +105,41 @@ describe('avantis-realtime-salary', () => {
     assert.equal(employee1SalaryStateAccount.dailyRate, 1000);
 
   });
+
+  it('Employee can claim all of remaining salary', async () => {
+    const [salaryVaultAccountPDA, salaryVaultAccountPDABump] = await PublicKey.findProgramAddress(
+        [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_account"))],
+        program.programId
+    );
+
+    const [salaryVaultAuthorityPDA, salaryVaultAuthorityPDABump] = await PublicKey.findProgramAddress(
+        [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_authority"))],
+        program.programId
+    );
+
+    const [salaryStatePDA, salaryStatePDABump] = await PublicKey.findProgramAddress(
+        [employee1Keypair.publicKey.toBuffer()],
+        program.programId
+    );
+
+    const tx = await program.rpc.claimSalary(
+        {
+          accounts: {
+            claimer: employee1Keypair.publicKey,
+            employeeTokenAccount: employee1TokenAccount,
+            vaultAccount: salaryVaultAccountPDA,
+            employeeSalaryState: salaryStatePDA,
+            vaultAuthority: salaryVaultAuthorityPDA,
+            tokenProgram: TOKEN_PROGRAM_ID
+          },
+          signers: [employee1Keypair],
+        }
+    );
+
+    // TODO: assert claimed amount
+
+
+
+  });
+
 });
