@@ -39,6 +39,12 @@ pub mod avantis_realtime_salary {
     pub fn claim_salary(ctx: Context<ClaimSalary>) -> ProgramResult {
         unimplemented!();
     }
+
+    pub fn deposit_to_vault(ctx: Context<DepositToVault>, deposit_amount: u64) -> ProgramResult {
+        // Transfer depositor's token to vault
+        token::transfer(ctx.accounts.into_transfer_to_vault_context(), deposit_amount)?;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -106,4 +112,28 @@ pub struct ClaimSalary<'info> {
     pub employee_token_account: Account<'info, TokenAccount>,
     pub vault_account: Account<'info, TokenAccount>,
     pub pool_vault_authority: AccountInfo<'info>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(deposit_amount: u8)]
+pub struct DepositToVault<'info> {
+    pub depositor: Signer<'info>,
+    #[account(mut)]
+    pub vault_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub depositor_token_account: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+impl<'info> DepositToVault<'info> {
+    fn into_transfer_to_vault_context(&self) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.depositor_token_account.to_account_info().clone(),
+            to: self.vault_account.to_account_info().clone(),
+            authority: self.depositor.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
 }

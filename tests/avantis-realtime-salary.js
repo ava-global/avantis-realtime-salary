@@ -107,4 +107,45 @@ describe('avantis-realtime-salary', () => {
     assert.equal(employee1SalaryStateAccount.dailyRate, 1000);
 
   });
+
+  it('Employer can deposit to vault', async () => {
+    let depositAmount = 1000
+
+    const [salaryVaultAccountPDA, salaryVaultAccountPDABump] = await PublicKey.findProgramAddress(
+        [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_account"))],
+        program.programId
+    );
+
+    employerTokenAccount = await mintAccount.createAccount(initilizerKeypair.publicKey);
+
+    // Mint token to employer
+    await mintAccount.mintTo(
+        employerTokenAccount,
+        mintAccountKeypair.publicKey,
+        [mintAccountKeypair],
+        100000
+    );
+
+    let vaultTokenBeforeDeposit = await mintAccount.getAccountInfo(salaryVaultAccountPDA);
+    let vaultAmountBeforeDeposit = vaultTokenBeforeDeposit.amount.toNumber()
+
+    const tx = await program.rpc.depositToVault(
+        new anchor.BN(depositAmount),
+        {
+          accounts: {
+            depositor: initilizerKeypair.publicKey,
+            vaultAccount: salaryVaultAccountPDA,
+            depositorTokenAccount: employerTokenAccount,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          },
+          signers: [initilizerKeypair],
+        }
+    );
+    let vaultTokenAfterDeposit = await mintAccount.getAccountInfo(salaryVaultAccountPDA);
+    let vaultAmountAfterDeposit = vaultTokenAfterDeposit.amount.toNumber()
+
+    assert.equal(vaultAmountBeforeDeposit, 0);
+    assert.equal(vaultAmountAfterDeposit, depositAmount);
+  });
+
 });
