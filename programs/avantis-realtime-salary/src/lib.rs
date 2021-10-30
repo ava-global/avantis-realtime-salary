@@ -127,6 +127,7 @@ pub struct EmployeeSalaryState {
 #[derive(Accounts)]
 pub struct ClaimSalary<'info> {
     pub claimer: Signer<'info>,
+    #[account(mut)]
     pub employee_token_account: Account<'info, TokenAccount>,
     #[account(mut)]
     pub vault_account: Account<'info, TokenAccount>,
