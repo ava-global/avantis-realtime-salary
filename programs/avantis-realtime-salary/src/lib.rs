@@ -14,7 +14,12 @@ const SALARY_VAULT_PDA_SEED: &[u8] = b"salary_vault_authority";
 #[program]
 pub mod avantis_realtime_salary {
     use super::*;
-    pub fn initialize(ctx: Context<Initialize>, _salary_vault_account_bump: u8) -> ProgramResult {
+    pub fn initialize(ctx: Context<Initialize>, _salary_vault_account_bump: u8, _salary_shared_state_account_bump: u8) -> ProgramResult {
+        // Initialize pool shared account value
+        ctx.accounts.salary_program_shared_state.initializer_pubkey = *ctx.accounts.initializer.key;
+        ctx.accounts.salary_program_shared_state.vault_account_pubkey =
+            *ctx.accounts.vault_account.to_account_info().key;
+
         // Transfer ownership of Salary's Vault to program
         let (salary_vault_authority, _bump) =
             Pubkey::find_program_address(&[SALARY_VAULT_PDA_SEED], ctx.program_id);
@@ -28,9 +33,10 @@ pub mod avantis_realtime_salary {
     }
 
     pub fn add_employee(ctx: Context<AddEmployee>, daily_rate: u64, _bump: u8) -> ProgramResult {
+        ctx.accounts.employee_salary_state.salary_vault_account_pubkey = ctx.accounts.salary_program_shared_state.vault_account_pubkey;
         ctx.accounts.employee_salary_state.daily_rate = daily_rate;
         ctx.accounts.employee_salary_state.employee_pubkey = *ctx.accounts.employee.key;
-        ctx.accounts.employee_salary_state.employee_token_account = ctx.accounts.employee_token_account.key();
+        ctx.accounts.employee_salary_state.employee_token_account_pubkey = ctx.accounts.employee_token_account.key();
         ctx.accounts.employee_salary_state.last_claimed_timestamp = Clock::get()?.unix_timestamp;
 
         Ok(())
@@ -48,11 +54,18 @@ pub mod avantis_realtime_salary {
 }
 
 #[derive(Accounts)]
-#[instruction(salary_vault_account_bump: u8)]
+#[instruction(salary_vault_account_bump: u8, salary_shared_state_account_bump: u8)]
 pub struct Initialize<'info> {
     #[account(mut)]
     pub initializer: Signer<'info>,
-
+    #[account(
+        init,
+        seeds = [ b"salary_shared_state_account".as_ref()],
+        bump = salary_shared_state_account_bump,
+        payer = initializer,
+        space = 8 + 32 + 32
+    )]
+    pub salary_program_shared_state: Account<'info, SalaryProgramSharedState>,
     #[account(
         init,
         seeds = [ b"salary_vault_account".as_ref()],
@@ -66,7 +79,15 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
     pub mint: Account<'info, Mint>,
+
 }
+
+#[account]
+pub struct SalaryProgramSharedState {
+    pub initializer_pubkey: Pubkey,
+    pub vault_account_pubkey: Pubkey,
+}
+
 
 impl<'info> Initialize<'info> {
     fn into_set_authority_context(&self) -> CpiContext<'_, '_, '_, 'info, SetAuthority<'info>> {
@@ -85,11 +106,15 @@ pub struct AddEmployee<'info> {
     #[account(mut)]
     pub adder: Signer<'info>,
     #[account(
+        constraint = salary_program_shared_state.initializer_pubkey == *adder.key,
+    )]
+    pub salary_program_shared_state: Account<'info, SalaryProgramSharedState>,
+    #[account(
         init,
         seeds = [employee.key.as_ref()],
         bump = bump,
         payer = adder,
-        space = 8 + 32 + 32 + 8 + 8,
+        space = 8 + 32 + 32 + 32 + 8 + 8,
     )]
     pub employee_salary_state: Account<'info, EmployeeSalaryState>,
     pub employee_token_account: Account<'info, TokenAccount>,
@@ -100,8 +125,9 @@ pub struct AddEmployee<'info> {
 
 #[account]
 pub struct EmployeeSalaryState {
+    pub salary_vault_account_pubkey: Pubkey,
     pub employee_pubkey: Pubkey,
-    pub employee_token_account: Pubkey,
+    pub employee_token_account_pubkey: Pubkey,
     pub daily_rate: u64,
     pub last_claimed_timestamp: i64,
 }
