@@ -39,6 +39,15 @@ jobs:
     - name: export solana path
       run: export PATH="~/.local/share/solana/install/active_release/bin:$PATH"
       
+    - name: print solana version
+      run: solana --version
+      
+    - name: gen wallet
+      run: solana-keygen new
+      
+    - name: view config detail
+      run: solana config get
+      
     - name: install mocha
       run: npm install -g mocha
       
@@ -49,4 +58,5 @@ jobs:
       run: npm install -g yarn
        
     - run: yarn install
+    - run: cargo check
     - run: anchor test
