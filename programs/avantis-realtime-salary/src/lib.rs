@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, SetAuthority, Token, TokenAccount, Transfer};
+use spl_math::precise_number::PreciseNumber;
 use spl_token::instruction::AuthorityType;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
@@ -44,20 +45,19 @@ pub mod avantis_realtime_salary {
         ctx.accounts
             .employee_salary_state
             .employee_token_account_pubkey = ctx.accounts.employee_token_account.key();
-        ctx.accounts.employee_salary_state.last_claimed_timestamp =
-            Clock::get()?.unix_timestamp as u64;
+        ctx.accounts.employee_salary_state.last_claimed_timestamp = Clock::get()?.unix_timestamp;
 
         Ok(())
     }
 
     pub fn claim_salary(ctx: Context<ClaimSalary>) -> ProgramResult {
         let claimer_salary_state = &mut ctx.accounts.employee_salary_state;
-        let now = Clock::get()?.unix_timestamp as u64;
+        let now = Clock::get()?.unix_timestamp;
 
         let claimable_amount = calculate_claimable_amount(
-            claimer_salary_state.daily_rate,
-            claimer_salary_state.last_claimed_timestamp,
-            now,
+            PreciseNumber::new(claimer_salary_state.daily_rate as u128).unwrap(),
+            PreciseNumber::new(claimer_salary_state.last_claimed_timestamp as u128).unwrap(),
+            PreciseNumber::new(now as u128).unwrap(),
         );
 
         // after calculate claimable amount , then reset last claimed timestamp to now.
@@ -71,7 +71,7 @@ pub mod avantis_realtime_salary {
             ctx.accounts
                 .into_transfer_to_claimer_context()
                 .with_signer(&[&vault_authority_seed[..]]),
-            claimable_amount,
+            claimable_amount.to_imprecise().unwrap() as u64,
         )?;
 
         Ok(())
@@ -161,7 +161,7 @@ pub struct EmployeeSalaryState {
     pub employee_pubkey: Pubkey,
     pub employee_token_account_pubkey: Pubkey,
     pub daily_rate: u64,
-    pub last_claimed_timestamp: u64,
+    pub last_claimed_timestamp: i64,
 }
 
 #[derive(Accounts)]
@@ -192,11 +192,15 @@ impl<'info> ClaimSalary<'info> {
     }
 }
 
-pub fn calculate_claimable_amount(daily_rate: u64, last_claimed_timestamp: u64, now: u64) -> u64 {
-    let sec_diff = now - last_claimed_timestamp;
-    // Should we use spl math ?
-    let amount_per_sec = daily_rate / (24 * 60 * 60);
-    sec_diff * amount_per_sec
+pub fn calculate_claimable_amount(
+    daily_rate: PreciseNumber,
+    last_claimed_timestamp: PreciseNumber,
+    now: PreciseNumber,
+) -> PreciseNumber {
+    let sec_diff = now.checked_sub(&last_claimed_timestamp).unwrap();
+    let day = PreciseNumber::new(24 * 60 * 60).unwrap();
+    let amount_per_sec = daily_rate.checked_div(&day).unwrap();
+    sec_diff.checked_mul(&amount_per_sec).unwrap()
 }
 
 #[derive(Accounts)]
