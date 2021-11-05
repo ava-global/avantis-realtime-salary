@@ -36,8 +36,11 @@ jobs:
     - name: install solana
       run: sh -c "$(curl -sSfL https://release.solana.com/v1.8.0/install)"
       
-    - name: export solana path
-      run: export PATH="~/.local/share/solana/install/active_release/bin:$PATH"
+    - name: reload .profile
+      run: source $HOME/.profile
+      
+    - name: reload .bash_profile
+      run: source $HOME/.bash_profile
       
     - name: print solana version
       run: solana --version
