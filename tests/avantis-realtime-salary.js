@@ -40,6 +40,11 @@ describe('avantis-realtime-salary', () => {
       TOKEN_PROGRAM_ID
     );
 
+    const [salaryProgramSharedStatePDA, salaryProgramSharedStatePDABump] = await PublicKey.findProgramAddress(
+      [Buffer.from(anchor.utils.bytes.utf8.encode("salary_shared_state_account"))],
+      program.programId
+    );
+
     const [salaryVaultAccountPDA, salaryVaultAccountPDABump] = await PublicKey.findProgramAddress(
       [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_account"))],
       program.programId
@@ -47,11 +52,12 @@ describe('avantis-realtime-salary', () => {
 
     // Add your test here.
     const tx = await program.rpc.initialize(
-      salaryVaultAccountPDABump,
+      salaryVaultAccountPDABump, salaryProgramSharedStatePDABump,
       {
         accounts: {
           initializer: initilizerKeypair.publicKey,
           mint: mintAccount.publicKey,
+          salaryProgramSharedState: salaryProgramSharedStatePDA,
           vaultAccount: salaryVaultAccountPDA,
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
@@ -75,65 +81,163 @@ describe('avantis-realtime-salary', () => {
   });
 
   it('Add Employee should save correct state', async () => {
-    const [salaryStatePDA, salaryStatePDABump] = await PublicKey.findProgramAddress(
-        [employee1Keypair.publicKey.toBuffer()],
-        program.programId
+
+    const [salaryProgramSharedStatePDA, salaryProgramSharedStatePDABump] = await PublicKey.findProgramAddress(
+      [Buffer.from(anchor.utils.bytes.utf8.encode("salary_shared_state_account"))],
+      program.programId
+    );
+
+
+    const [employeeSalaryStatePDA, employeeSalaryStatePDABump] = await PublicKey.findProgramAddress(
+      [employee1Keypair.publicKey.toBuffer()],
+      program.programId
     );
 
     employee1TokenAccount = await mintAccount.createAccount(employee1Keypair.publicKey);
 
     const daily_rate = new anchor.BN(1000);
     const tx = await program.rpc.addEmployee(
-        daily_rate, salaryStatePDABump,
-        {
-          accounts: {
-            adder: initilizerKeypair.publicKey,
-            employeeSalaryState: salaryStatePDA,
-            employeeTokenAccount: employee1TokenAccount,
-            employee: employee1Keypair.publicKey,
-            systemProgram: anchor.web3.SystemProgram.programId,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-          },
-          signers: [initilizerKeypair],
-        }
+      daily_rate, employeeSalaryStatePDABump,
+      {
+        accounts: {
+          adder: initilizerKeypair.publicKey,
+          salaryProgramSharedState: salaryProgramSharedStatePDA,
+          employeeSalaryState: employeeSalaryStatePDA,
+          employeeTokenAccount: employee1TokenAccount,
+          employee: employee1Keypair.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        },
+        signers: [initilizerKeypair],
+      }
     );
 
     let employee1SalaryStateAccount = await program.account.employeeSalaryState.fetch(
-        salaryStatePDA
+      employeeSalaryStatePDA
     );
 
     assert.equal(employee1SalaryStateAccount.dailyRate, 1000);
 
   });
 
+
+  it('Who is not initialzer cannot add employee', async () => {
+    const fakeInitilizerKeypair = anchor.web3.Keypair.generate();
+    await provider.connection.confirmTransaction(
+      await provider.connection.requestAirdrop(fakeInitilizerKeypair.publicKey, 10000000000),
+      "confirmed"
+    );
+
+    const [salaryProgramSharedStatePDA, salaryProgramSharedStatePDABump] = await PublicKey.findProgramAddress(
+      [Buffer.from(anchor.utils.bytes.utf8.encode("salary_shared_state_account"))],
+      program.programId
+    );
+
+    const [employeeSalaryStatePDA, employeeSalaryStatePDABump] = await PublicKey.findProgramAddress(
+      [employee2Keypair.publicKey.toBuffer()],
+      program.programId
+    );
+
+    employee2TokenAccount = await mintAccount.createAccount(employee2Keypair.publicKey);
+
+    console.log("initializer: ", fakeInitilizerKeypair.publicKey)
+    console.log("fakeinitializer: ", initilizerKeypair.publicKey)
+    const daily_rate = new anchor.BN(1000);
+
+    try {
+      await program.rpc.addEmployee(
+        daily_rate, employeeSalaryStatePDABump,
+        {
+          accounts: {
+            adder: fakeInitilizerKeypair.publicKey,
+            salaryProgramSharedState: salaryProgramSharedStatePDA,
+            employeeSalaryState: employeeSalaryStatePDA,
+            employeeTokenAccount: employee2TokenAccount,
+            employee: employee2Keypair.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          },
+          signers: [fakeInitilizerKeypair],
+        }
+      );
+      assert.ok(false);
+    } catch (err) {
+      const errMsg = "A raw constraint was violated";
+      assert.equal(err.toString(), errMsg);
+    }
+
+  });
+
+
+  it('Employer can deposit to vault', async () => {
+    let depositAmount = 1000
+
+    const [salaryVaultAccountPDA, salaryVaultAccountPDABump] = await PublicKey.findProgramAddress(
+      [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_account"))],
+      program.programId
+    );
+
+    employerTokenAccount = await mintAccount.createAccount(initilizerKeypair.publicKey);
+
+    // Mint token to employer
+    await mintAccount.mintTo(
+      employerTokenAccount,
+      mintAccountKeypair.publicKey,
+      [mintAccountKeypair],
+      100000
+    );
+
+    let vaultTokenBeforeDeposit = await mintAccount.getAccountInfo(salaryVaultAccountPDA);
+    let vaultAmountBeforeDeposit = vaultTokenBeforeDeposit.amount.toNumber()
+
+    const tx = await program.rpc.depositToVault(
+      new anchor.BN(depositAmount),
+      {
+        accounts: {
+          depositor: initilizerKeypair.publicKey,
+          vaultAccount: salaryVaultAccountPDA,
+          depositorTokenAccount: employerTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [initilizerKeypair],
+      }
+    );
+    let vaultTokenAfterDeposit = await mintAccount.getAccountInfo(salaryVaultAccountPDA);
+    let vaultAmountAfterDeposit = vaultTokenAfterDeposit.amount.toNumber()
+
+    assert.equal(vaultAmountBeforeDeposit, 0);
+    assert.equal(vaultAmountAfterDeposit, depositAmount);
+  });
+
+
   it('Employee can claim all of remaining salary', async () => {
     const [salaryVaultAccountPDA, salaryVaultAccountPDABump] = await PublicKey.findProgramAddress(
-        [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_account"))],
-        program.programId
+      [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_account"))],
+      program.programId
     );
 
     const [salaryVaultAuthorityPDA, salaryVaultAuthorityPDABump] = await PublicKey.findProgramAddress(
-        [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_authority"))],
-        program.programId
+      [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_authority"))],
+      program.programId
     );
 
     const [salaryStatePDA, salaryStatePDABump] = await PublicKey.findProgramAddress(
-        [employee1Keypair.publicKey.toBuffer()],
-        program.programId
+      [employee1Keypair.publicKey.toBuffer()],
+      program.programId
     );
 
     const tx = await program.rpc.claimSalary(
-        {
-          accounts: {
-            claimer: employee1Keypair.publicKey,
-            employeeTokenAccount: employee1TokenAccount,
-            vaultAccount: salaryVaultAccountPDA,
-            employeeSalaryState: salaryStatePDA,
-            vaultAuthority: salaryVaultAuthorityPDA,
-            tokenProgram: TOKEN_PROGRAM_ID
-          },
-          signers: [employee1Keypair],
-        }
+      {
+        accounts: {
+          claimer: employee1Keypair.publicKey,
+          employeeTokenAccount: employee1TokenAccount,
+          vaultAccount: salaryVaultAccountPDA,
+          employeeSalaryState: salaryStatePDA,
+          vaultAuthority: salaryVaultAuthorityPDA,
+          tokenProgram: TOKEN_PROGRAM_ID
+        },
+        signers: [employee1Keypair],
+      }
     );
 
     // TODO: assert claimed amount
@@ -141,5 +245,6 @@ describe('avantis-realtime-salary', () => {
 
 
   });
+
 
 });
