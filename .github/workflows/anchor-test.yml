@@ -39,6 +39,7 @@ jobs:
       
     - name: install yarn 
       run: npm install -g yarn
-      
+       
     - run: yarn install
+    - run: cargo build 
     - run: anchor test
