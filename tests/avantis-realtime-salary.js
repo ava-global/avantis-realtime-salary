@@ -257,7 +257,8 @@ describe('avantis-realtime-salary', () => {
 
     // we expect >5 token because total daily rate is 24 * 60 * 60 = 1 token per seconds
     // we sleep 5 seconds, so total claimed should > 5
-    assert.ok(totalClaimedAmount > 5);
+    // but anyway we expect that it should not more than 10
+    assert.ok(totalClaimedAmount >= 5 && totalClaimedAmount <= 10);
 
   });
 
