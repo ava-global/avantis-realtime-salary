@@ -1,11 +1,6 @@
 use anchor_lang::prelude::*;
-
-use anchor_lang::prelude::*;
-use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, Transfer};
-use anchor_spl::token::{Mint, SetAuthority, TokenAccount};
+use anchor_spl::token::{self, Mint, SetAuthority, Token, TokenAccount, Transfer};
 use spl_token::instruction::AuthorityType;
-use spl_token::solana_program::clock::UnixTimestamp;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -42,13 +37,14 @@ pub mod avantis_realtime_salary {
         let claimer_salary_state = &mut ctx.accounts.employee_salary_state;
         let now = Clock::get()?.unix_timestamp as u64;
 
-        claimer_salary_state.last_claimed_timestamp = now;
-
         let claimable_amount = calculate_claimable_amount(
             claimer_salary_state.daily_rate,
             claimer_salary_state.last_claimed_timestamp,
             now,
         );
+
+        // after calculate claimable amount , then reset last claimed timestamp to now.
+        claimer_salary_state.last_claimed_timestamp = now;
 
         let (_vault_authority, vault_authority_bump) =
             Pubkey::find_program_address(&[SALARY_VAULT_PDA_SEED], ctx.program_id);
