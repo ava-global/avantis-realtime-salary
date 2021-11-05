@@ -95,7 +95,9 @@ describe('avantis-realtime-salary', () => {
 
     employee1TokenAccount = await mintAccount.createAccount(employee1Keypair.publicKey);
 
-    const daily_rate = new anchor.BN(1000);
+    // expect daily rate to 1 token per 1 sec
+    // this will be easier when we assert claim amount
+    const daily_rate = new anchor.BN(24 * 60 * 60);
     const tx = await program.rpc.addEmployee(
       daily_rate, employeeSalaryStatePDABump,
       {
@@ -116,7 +118,7 @@ describe('avantis-realtime-salary', () => {
       employeeSalaryStatePDA
     );
 
-    assert.equal(employee1SalaryStateAccount.dailyRate, 1000);
+    assert.equal(employee1SalaryStateAccount.dailyRate, 24 * 60 * 60);
 
   });
 
@@ -226,6 +228,12 @@ describe('avantis-realtime-salary', () => {
       program.programId
     );
 
+    let employeeAmountBeforeClaim = await mintAccount.getAccountInfo(employee1TokenAccount);
+    employeeAmountBeforeClaim = employeeAmountBeforeClaim.amount.toNumber();
+
+    //sleep for 5 seconds to wait for claimable amount
+    await sleep(5000);
+
     const tx = await program.rpc.claimSalary(
       {
         accounts: {
@@ -240,11 +248,20 @@ describe('avantis-realtime-salary', () => {
       }
     );
 
-    // TODO: assert claimed amount
+    let employeeAmountAfterClaim = await mintAccount.getAccountInfo(employee1TokenAccount);
+    employeeAmountAfterClaim = employeeAmountAfterClaim.amount.toNumber();
 
+    let totalClaimedAmount = employeeAmountAfterClaim - employeeAmountBeforeClaim;
 
+    console.log("total claimed amount", totalClaimedAmount);
+    assert.ok(totalClaimedAmount > 5);
 
   });
 
 
 });
+
+function sleep(ms) {
+  console.log("Sleeping for", ms / 1000, "seconds");
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
