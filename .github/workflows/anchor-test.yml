@@ -58,5 +58,5 @@ jobs:
       run: npm install -g yarn
        
     - run: yarn install
-    - run: cargo check
+
     - run: anchor test
