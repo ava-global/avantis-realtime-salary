@@ -1,0 +1,62 @@
+# This workflow will do a clean install of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+
+name: Node.js CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [16.x]
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: install rust toolchain 
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: install solana
+      run: sh -c "$(curl -sSfL https://release.solana.com/v1.8.0/install)"
+      
+    - name: add solana to path
+      run: echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      
+    - name: print solana version
+      run: solana --version
+      
+    - name: gen wallet
+      run: solana-keygen new
+      
+    - name: view config detail
+      run: solana config get
+      
+    - name: install mocha
+      run: npm install -g mocha
+      
+    - name: install anchor
+      run: npm i -g @project-serum/anchor-cli
+      
+    - name: install yarn 
+      run: npm install -g yarn
+       
+    - run: yarn install
+
+    - run: anchor test
