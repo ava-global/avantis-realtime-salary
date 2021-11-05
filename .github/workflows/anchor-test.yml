@@ -31,6 +31,9 @@ jobs:
     - name: install solana
       run: sh -c "$(curl -sSfL https://release.solana.com/v1.8.0/install)"
       
+    - name: export solana path
+      run: export PATH="~/.local/share/solana/install/active_release/bin:$PATH"
+      
     - name: install mocha
       run: npm install -g mocha
       
@@ -41,5 +44,4 @@ jobs:
       run: npm install -g yarn
        
     - run: yarn install
-    - run: cargo build 
     - run: anchor test
