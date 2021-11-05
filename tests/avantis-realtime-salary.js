@@ -254,6 +254,9 @@ describe('avantis-realtime-salary', () => {
     let totalClaimedAmount = employeeAmountAfterClaim - employeeAmountBeforeClaim;
 
     console.log("total claimed amount", totalClaimedAmount);
+
+    // we expect >5 token because total daily rate is 24 * 60 * 60 = 1 token per seconds
+    // we sleep 5 seconds, so total claimed should > 5
     assert.ok(totalClaimedAmount > 5);
 
   });
