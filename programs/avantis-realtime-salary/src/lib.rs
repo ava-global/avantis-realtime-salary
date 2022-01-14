@@ -167,9 +167,13 @@ pub struct EmployeeSalaryState {
 #[derive(Accounts)]
 pub struct ClaimSalary<'info> {
     pub claimer: Signer<'info>,
+    pub salary_program_shared_state: Account<'info, SalaryProgramSharedState>,
     #[account(mut)]
     pub employee_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = salary_program_shared_state.vault_account_pubkey == *vault_account.to_account_info().key
+    )]
     pub vault_account: Account<'info, TokenAccount>,
     #[account(
         mut,
