@@ -56,12 +56,12 @@ describe('avantis-realtime-salary', () => {
       {
         accounts: {
           initializer: initilizerKeypair.publicKey,
-          mint: mintAccount.publicKey,
           salaryProgramSharedState: salaryProgramSharedStatePDA,
           vaultAccount: salaryVaultAccountPDA,
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          mint: mintAccount.publicKey,
 
         },
         signers: [initilizerKeypair],
@@ -213,6 +213,12 @@ describe('avantis-realtime-salary', () => {
 
 
   it('Employee can claim all of remaining salary', async () => {
+
+    const [salaryProgramSharedStatePDA, salaryProgramSharedStatePDABump] = await PublicKey.findProgramAddress(
+        [Buffer.from(anchor.utils.bytes.utf8.encode("salary_shared_state_account"))],
+        program.programId
+    );
+
     const [salaryVaultAccountPDA, salaryVaultAccountPDABump] = await PublicKey.findProgramAddress(
       [Buffer.from(anchor.utils.bytes.utf8.encode("salary_vault_account"))],
       program.programId
@@ -238,6 +244,7 @@ describe('avantis-realtime-salary', () => {
       {
         accounts: {
           claimer: employee1Keypair.publicKey,
+          salaryProgramSharedState: salaryProgramSharedStatePDA,
           employeeTokenAccount: employee1TokenAccount,
           vaultAccount: salaryVaultAccountPDA,
           employeeSalaryState: salaryStatePDA,
@@ -261,7 +268,6 @@ describe('avantis-realtime-salary', () => {
     assert.ok(totalClaimedAmount >= 5 && totalClaimedAmount <= 10);
 
   });
-
 
 });
 
