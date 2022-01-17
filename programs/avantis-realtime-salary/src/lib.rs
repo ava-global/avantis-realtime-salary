@@ -97,7 +97,7 @@ pub struct Initialize<'info> {
         seeds = [ b"salary_shared_state_account".as_ref()],
         bump = salary_shared_state_account_bump,
         payer = initializer,
-        space = 8 + 32 + 32
+        space = std::mem::size_of::<Account<'info, SalaryProgramSharedState>>()
     )]
     pub salary_program_shared_state: Account<'info, SalaryProgramSharedState>,
     #[account(
@@ -146,7 +146,7 @@ pub struct AddEmployee<'info> {
         seeds = [employee.key.as_ref()],
         bump = bump,
         payer = adder,
-        space = 8 + 32 + 32 + 32 + 8 + 8,
+        space = std::mem::size_of::<Account<'info, EmployeeSalaryState>>(),
     )]
     pub employee_salary_state: Account<'info, EmployeeSalaryState>,
     pub employee_token_account: Account<'info, TokenAccount>,
