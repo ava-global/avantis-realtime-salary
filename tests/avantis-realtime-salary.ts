@@ -4,8 +4,8 @@ import { SendTransactionError } from "@solana/web3.js";
 import { times } from "ramda";
 
 import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
-import * as chaiBn from "chai-bn";
+import chaiAsPromised from "chai-as-promised";
+import chaiBn from "chai-bn";
 import { Duration } from "luxon";
 
 function setUpTestRunner() {
@@ -94,8 +94,12 @@ describe("avantis-realtime-salary", () => {
   }
 
   async function initAllKeypairs() {
-    [employerKeypair, employeeKeypair, unknownPersonKeypair, mintAccountKeypair] =
-      times(anchor.web3.Keypair.generate, 4);
+    [
+      employerKeypair,
+      employeeKeypair,
+      unknownPersonKeypair,
+      mintAccountKeypair,
+    ] = times(anchor.web3.Keypair.generate, 4);
   }
 
   async function initAllTokenAccounts() {
@@ -227,18 +231,22 @@ describe("avantis-realtime-salary", () => {
     describe("when add from someone else", () => {
       it("should failed", async () => {
         return program.rpc
-          .addEmployee(oneTokenPerSecDailyRate, unknownPersonSalaryStatePDABump, {
-            signers: [employeeKeypair],
-            accounts: {
-              adder: employeeKeypair.publicKey,
-              salaryProgramSharedState: salaryProgramSharedStatePDA,
-              employeeSalaryState: unknownPersonSalaryStatePDA,
-              employeeTokenAccount: unknownPersonTokenAccount,
-              employee: unknownPersonKeypair.publicKey,
-              systemProgram: anchor.web3.SystemProgram.programId,
-              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-            },
-          })
+          .addEmployee(
+            oneTokenPerSecDailyRate,
+            unknownPersonSalaryStatePDABump,
+            {
+              signers: [employeeKeypair],
+              accounts: {
+                adder: employeeKeypair.publicKey,
+                salaryProgramSharedState: salaryProgramSharedStatePDA,
+                employeeSalaryState: unknownPersonSalaryStatePDA,
+                employeeTokenAccount: unknownPersonTokenAccount,
+                employee: unknownPersonKeypair.publicKey,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+              },
+            }
+          )
           .should.be.rejectedWith(SendTransactionError);
       });
     });
@@ -296,7 +304,7 @@ describe("avantis-realtime-salary", () => {
       let claimerKeypair: anchor.web3.Keypair;
       let claimerTokenAccount: anchor.web3.PublicKey;
       let claimerSalaryStatePDA: anchor.web3.PublicKey;
-      
+
       let initialVaultTokenCount: anchor.BN;
       let initialClaimerTokenCount: anchor.BN;
 
@@ -318,43 +326,45 @@ describe("avantis-realtime-salary", () => {
       });
 
       it("should be successful", async () => {
-        return program.rpc.claimSalary(
-          {
-            signers: [claimerKeypair],
-            accounts: {
-              claimer: claimerKeypair.publicKey,
-              salaryProgramSharedState: salaryProgramSharedStatePDA,
-              employeeTokenAccount: claimerTokenAccount,
-              vaultAccount: salaryVaultAccountPDA,
-              employeeSalaryState: claimerSalaryStatePDA,
-              vaultAuthority: salaryVaultAuthorityPDA,
-              tokenProgram: TOKEN_PROGRAM_ID
-            },
-          }
-        ).should.be.fulfilled;
+        return program.rpc.claimSalary({
+          signers: [claimerKeypair],
+          accounts: {
+            claimer: claimerKeypair.publicKey,
+            salaryProgramSharedState: salaryProgramSharedStatePDA,
+            employeeTokenAccount: claimerTokenAccount,
+            vaultAccount: salaryVaultAccountPDA,
+            employeeSalaryState: claimerSalaryStatePDA,
+            vaultAuthority: salaryVaultAuthorityPDA,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          },
+        }).should.be.fulfilled;
       });
 
       it("should give token to the claimer for an expectable amount", async () => {
-        const finalClaimerTokenCount: anchor.BN = (
+        const finalClaimerTokenCount = (
           await mintAccount.getAccountInfo(employeeTokenAccount)
         ).amount;
 
-        let claimedAmount = finalClaimerTokenCount.sub(initialClaimerTokenCount).toNumber();
+        let claimedAmount = finalClaimerTokenCount.sub(
+          initialClaimerTokenCount
+        );
 
         // we expect >5 token because total daily rate is 24 * 60 * 60 = 1 token per seconds
         // we slept for 5 seconds, so total claimed should > 5
-        claimedAmount.should.be.greaterThan(5);
+        claimedAmount.should.be.a.bignumber.greaterThan("5");
 
         // but anyway we expect that it should not more than 10
-        claimedAmount.should.be.lessThan(10);
-      })
+        claimedAmount.should.be.a.bignumber.lessThan("10");
+      });
 
       it("should subtract token from the vault equal to the claimed amount", async () => {
         const finalClaimerTokenCount: anchor.BN = (
           await mintAccount.getAccountInfo(employeeTokenAccount)
         ).amount;
 
-        let claimedAmount = finalClaimerTokenCount.sub(initialClaimerTokenCount);
+        let claimedAmount = finalClaimerTokenCount.sub(
+          initialClaimerTokenCount
+        );
 
         const finalVaultTokenCount: anchor.BN = (
           await mintAccount.getAccountInfo(salaryVaultAccountPDA)
@@ -362,9 +372,9 @@ describe("avantis-realtime-salary", () => {
 
         let subtractedAmount = initialVaultTokenCount.sub(finalVaultTokenCount);
 
-        claimedAmount.should.be.a.bignumber.that.equals(subtractedAmount)
-      })
-    })
+        claimedAmount.should.be.a.bignumber.that.equals(subtractedAmount);
+      });
+    });
 
     describe("when claim from someone else", () => {
       let claimerKeypair: anchor.web3.Keypair;
@@ -381,8 +391,8 @@ describe("avantis-realtime-salary", () => {
       });
 
       it("should failed", async () => {
-        return program.rpc.claimSalary(
-          {
+        return program.rpc
+          .claimSalary({
             signers: [claimerKeypair],
             accounts: {
               claimer: claimerKeypair.publicKey,
@@ -391,11 +401,13 @@ describe("avantis-realtime-salary", () => {
               vaultAccount: salaryVaultAccountPDA,
               employeeSalaryState: claimerSalaryStatePDA,
               vaultAuthority: salaryVaultAuthorityPDA,
-              tokenProgram: TOKEN_PROGRAM_ID
+              tokenProgram: TOKEN_PROGRAM_ID,
             },
-          }
-        ).should.be.rejectedWith("The given account is not owned by the executing program");
+          })
+          .should.be.rejectedWith(
+            "The given account is not owned by the executing program"
+          );
       });
-    })
-  })
+    });
+  });
 });

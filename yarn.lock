@@ -486,6 +486,13 @@
   dependencies:
     "@types/node" "*"
 
+"@types/bn.js@^5.1.0":
+  "integrity" "sha512-QSSVYj7pYFN49kW77o2s9xTCwZ8F2xLbjLLSEVh8D2F4JUhZtPAGOFLTD+ffqksBx/u4cE/KImFjyhqCjn/LIA=="
+  "resolved" "https://registry.npmjs.org/@types/bn.js/-/bn.js-5.1.0.tgz"
+  "version" "5.1.0"
+  dependencies:
+    "@types/node" "*"
+
 "@types/chai-as-promised@^7.1.4":
   "integrity" "sha512-1y3L1cHePcIm5vXkh1DSGf/zQq5n5xDKG1fpCvf18+uOkpce0Z1ozNFPkyWsVswK7ntN1sZBw3oU6gmN+pDUcA=="
   "resolved" "https://registry.npmjs.org/@types/chai-as-promised/-/chai-as-promised-7.1.4.tgz"
