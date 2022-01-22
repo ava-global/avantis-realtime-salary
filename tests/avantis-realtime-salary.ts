@@ -32,21 +32,21 @@ describe("avantis-realtime-salary", () => {
   let employerKeypair: anchor.web3.Keypair;
   let employerTokenAccount: anchor.web3.PublicKey;
 
-  let employee1Keypair: anchor.web3.Keypair;
-  let employee1TokenAccount: anchor.web3.PublicKey;
+  let employeeKeypair: anchor.web3.Keypair;
+  let employeeTokenAccount: anchor.web3.PublicKey;
 
-  let employee2Keypair: anchor.web3.Keypair;
-  let employee2TokenAccount: anchor.web3.PublicKey;
+  let unknownPersonKeypair: anchor.web3.Keypair;
+  let unknownPersonTokenAccount: anchor.web3.PublicKey;
 
-  let employee1SalaryStatePDA: anchor.web3.PublicKey;
-  let employee2SalaryStatePDA: anchor.web3.PublicKey;
+  let employeeSalaryStatePDA: anchor.web3.PublicKey;
+  let unknownPersonSalaryStatePDA: anchor.web3.PublicKey;
 
   let salaryVaultAccountPDA: anchor.web3.PublicKey;
   let salaryProgramSharedStatePDA: anchor.web3.PublicKey;
   let salaryVaultAuthorityPDA: anchor.web3.PublicKey;
 
-  let employee1SalaryStatePDABump: number;
-  let employee2SalaryStatePDABump: number;
+  let employeeSalaryStatePDABump: number;
+  let unknownPersonSalaryStatePDABump: number;
 
   let salaryVaultAccountPDABump: number;
   let salaryProgramSharedStatePDABump: number;
@@ -84,24 +84,24 @@ describe("avantis-realtime-salary", () => {
 
   async function initAllEmployeeAccounts() {
     [
-      [employee1SalaryStatePDA, employee1SalaryStatePDABump],
-      [employee2SalaryStatePDA, employee2SalaryStatePDABump],
+      [employeeSalaryStatePDA, employeeSalaryStatePDABump],
+      [unknownPersonSalaryStatePDA, unknownPersonSalaryStatePDABump],
     ] = await Promise.all(
-      [employee1Keypair, employee2Keypair].map((keypair) =>
+      [employeeKeypair, unknownPersonKeypair].map((keypair) =>
         findEmployeeSalaryStateAddress(keypair)
       )
     );
   }
 
   async function initAllKeypairs() {
-    [employerKeypair, employee1Keypair, employee2Keypair, mintAccountKeypair] =
+    [employerKeypair, employeeKeypair, unknownPersonKeypair, mintAccountKeypair] =
       times(anchor.web3.Keypair.generate, 4);
   }
 
   async function initAllTokenAccounts() {
-    [employerTokenAccount, employee1TokenAccount, employee2TokenAccount] =
+    [employerTokenAccount, employeeTokenAccount, unknownPersonTokenAccount] =
       await Promise.all(
-        [employerKeypair, employee1Keypair, employee2Keypair]
+        [employerKeypair, employeeKeypair, unknownPersonKeypair]
           .map((keypair) => keypair.publicKey)
           .map((publicKey) => mintAccount.createAccount(publicKey))
       );
@@ -196,15 +196,15 @@ describe("avantis-realtime-salary", () => {
       it("should be successful", async () => {
         return program.rpc.addEmployee(
           oneTokenPerSecDailyRate,
-          employee1SalaryStatePDABump,
+          employeeSalaryStatePDABump,
           {
             signers: [employerKeypair],
             accounts: {
               adder: employerKeypair.publicKey,
               salaryProgramSharedState: salaryProgramSharedStatePDA,
-              employeeSalaryState: employee1SalaryStatePDA,
-              employeeTokenAccount: employee1TokenAccount,
-              employee: employee1Keypair.publicKey,
+              employeeSalaryState: employeeSalaryStatePDA,
+              employeeTokenAccount: employeeTokenAccount,
+              employee: employeeKeypair.publicKey,
               systemProgram: anchor.web3.SystemProgram.programId,
               rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             },
@@ -215,7 +215,7 @@ describe("avantis-realtime-salary", () => {
       it("should have employee daily rate as expected", async () => {
         let employee1SalaryStateAccount =
           await program.account.employeeSalaryState.fetch(
-            employee1SalaryStatePDA
+            employeeSalaryStatePDA
           );
 
         const dailyRate: anchor.BN = employee1SalaryStateAccount.dailyRate;
@@ -227,14 +227,14 @@ describe("avantis-realtime-salary", () => {
     describe("when add from someone else", () => {
       it("should failed", async () => {
         return program.rpc
-          .addEmployee(oneTokenPerSecDailyRate, employee2SalaryStatePDABump, {
-            signers: [employee1Keypair],
+          .addEmployee(oneTokenPerSecDailyRate, unknownPersonSalaryStatePDABump, {
+            signers: [employeeKeypair],
             accounts: {
-              adder: employee1Keypair.publicKey,
+              adder: employeeKeypair.publicKey,
               salaryProgramSharedState: salaryProgramSharedStatePDA,
-              employeeSalaryState: employee2SalaryStatePDA,
-              employeeTokenAccount: employee2TokenAccount,
-              employee: employee2Keypair.publicKey,
+              employeeSalaryState: unknownPersonSalaryStatePDA,
+              employeeTokenAccount: unknownPersonTokenAccount,
+              employee: unknownPersonKeypair.publicKey,
               systemProgram: anchor.web3.SystemProgram.programId,
               rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             },
@@ -252,8 +252,8 @@ describe("avantis-realtime-salary", () => {
       const depositAmount = 1000;
 
       before(async () => {
-        depositorKeypair = employee2Keypair;
-        depositorTokenAccount = employee2TokenAccount;
+        depositorKeypair = unknownPersonKeypair;
+        depositorTokenAccount = unknownPersonTokenAccount;
 
         await mintAccount.mintTo(
           depositorTokenAccount,
@@ -301,16 +301,16 @@ describe("avantis-realtime-salary", () => {
       let initialClaimerTokenCount: anchor.BN;
 
       before(async () => {
-        claimerKeypair = employee1Keypair;
-        claimerTokenAccount = employee1TokenAccount;
-        claimerSalaryStatePDA = employee1SalaryStatePDA;
+        claimerKeypair = employeeKeypair;
+        claimerTokenAccount = employeeTokenAccount;
+        claimerSalaryStatePDA = employeeSalaryStatePDA;
 
         initialVaultTokenCount = (
           await mintAccount.getAccountInfo(salaryVaultAccountPDA)
         ).amount;
 
         initialClaimerTokenCount = (
-          await mintAccount.getAccountInfo(employee1TokenAccount)
+          await mintAccount.getAccountInfo(employeeTokenAccount)
         ).amount;
 
         //sleep for 5 seconds to wait for claimable amount
@@ -336,7 +336,7 @@ describe("avantis-realtime-salary", () => {
 
       it("should give token to the claimer for an expectable amount", async () => {
         const finalClaimerTokenCount: anchor.BN = (
-          await mintAccount.getAccountInfo(employee1TokenAccount)
+          await mintAccount.getAccountInfo(employeeTokenAccount)
         ).amount;
 
         let claimedAmount = finalClaimerTokenCount.sub(initialClaimerTokenCount).toNumber();
@@ -351,7 +351,7 @@ describe("avantis-realtime-salary", () => {
 
       it("should subtract token from the vault equal to the claimed amount", async () => {
         const finalClaimerTokenCount: anchor.BN = (
-          await mintAccount.getAccountInfo(employee1TokenAccount)
+          await mintAccount.getAccountInfo(employeeTokenAccount)
         ).amount;
 
         let claimedAmount = finalClaimerTokenCount.sub(initialClaimerTokenCount);
@@ -372,9 +372,9 @@ describe("avantis-realtime-salary", () => {
       let claimerSalaryStatePDA: anchor.web3.PublicKey;
 
       before(async () => {
-        claimerKeypair = employee2Keypair;
-        claimerTokenAccount = employee2TokenAccount;
-        claimerSalaryStatePDA = employee2SalaryStatePDA;
+        claimerKeypair = unknownPersonKeypair;
+        claimerTokenAccount = unknownPersonTokenAccount;
+        claimerSalaryStatePDA = unknownPersonSalaryStatePDA;
 
         //sleep for 5 seconds to wait for claimable amount
         await sleep(5000);
