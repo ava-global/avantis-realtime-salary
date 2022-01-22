@@ -107,6 +107,11 @@ describe("avantis-realtime-salary", () => {
       );
   }
 
+  async function sleep(ms: number) {
+    console.log("Sleeping for", ms / 1000, "seconds");
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   before(async () => {
     await initAllKeypairs();
 
@@ -133,41 +138,6 @@ describe("avantis-realtime-salary", () => {
 
     await initAllPdaAddresses();
     await initAllEmployeeAccounts();
-
-    // console.log(`program: \n  ${program.programId.toString()}`);
-    // console.log(
-    //   `salaryVaultAccountPDA: \n  ${salaryVaultAccountPDA.toString()}`
-    // );
-    // console.log(
-    //   `salaryProgramSharedStatePDA: \n  ${salaryProgramSharedStatePDA.toString()}`
-    // );
-    // console.log(
-    //   `salaryVaultAuthorityPDA: \n  ${salaryVaultAuthorityPDA.toString()}`
-    // );
-    // console.log(
-    //   `employee1Keypair.pubkey: \n  ${employee1Keypair.publicKey.toString()}`
-    // );
-    // console.log(
-    //   `employee2Keypair.pubkey: \n  ${employee2Keypair.publicKey.toString()}`
-    // );
-    // console.log(
-    //   `employee1Keypair.secretkey: \n  ${employee1Keypair.secretKey.toString()}`
-    // );
-    // console.log(
-    //   `employee2Keypair.secretkey: \n  ${employee2Keypair.secretKey.toString()}`
-    // );
-    // console.log(
-    //   `employee1SalaryStatePDA: \n  ${employee1SalaryStatePDA.toString()}`
-    // );
-    // console.log(
-    //   `employee2SalaryStatePDA: \n  ${employee2SalaryStatePDA.toString()}`
-    // );
-    // console.log(
-    //   `employee1TokenAccount: \n  ${employee1TokenAccount.toString()}`
-    // );
-    // console.log(
-    //   `employee2TokenAccount: \n  ${employee2TokenAccount.toString()}`
-    // );
   });
 
   describe("#initialize", () => {
@@ -320,4 +290,112 @@ describe("avantis-realtime-salary", () => {
       });
     });
   });
+
+  describe("#claimSalary", () => {
+    describe("when claim from employee", () => {
+      let claimerKeypair: anchor.web3.Keypair;
+      let claimerTokenAccount: anchor.web3.PublicKey;
+      let claimerSalaryStatePDA: anchor.web3.PublicKey;
+      
+      let initialVaultTokenCount: anchor.BN;
+      let initialClaimerTokenCount: anchor.BN;
+
+      before(async () => {
+        claimerKeypair = employee1Keypair;
+        claimerTokenAccount = employee1TokenAccount;
+        claimerSalaryStatePDA = employee1SalaryStatePDA;
+
+        initialVaultTokenCount = (
+          await mintAccount.getAccountInfo(salaryVaultAccountPDA)
+        ).amount;
+
+        initialClaimerTokenCount = (
+          await mintAccount.getAccountInfo(employee1TokenAccount)
+        ).amount;
+
+        //sleep for 5 seconds to wait for claimable amount
+        await sleep(5000);
+      });
+
+      it("should be successful", async () => {
+        return program.rpc.claimSalary(
+          {
+            signers: [claimerKeypair],
+            accounts: {
+              claimer: claimerKeypair.publicKey,
+              salaryProgramSharedState: salaryProgramSharedStatePDA,
+              employeeTokenAccount: claimerTokenAccount,
+              vaultAccount: salaryVaultAccountPDA,
+              employeeSalaryState: claimerSalaryStatePDA,
+              vaultAuthority: salaryVaultAuthorityPDA,
+              tokenProgram: TOKEN_PROGRAM_ID
+            },
+          }
+        ).should.be.fulfilled;
+      });
+
+      it("should give token to the claimer for an expectable amount", async () => {
+        const finalClaimerTokenCount: anchor.BN = (
+          await mintAccount.getAccountInfo(employee1TokenAccount)
+        ).amount;
+
+        let claimedAmount = finalClaimerTokenCount.sub(initialClaimerTokenCount).toNumber();
+
+        // we expect >5 token because total daily rate is 24 * 60 * 60 = 1 token per seconds
+        // we slept for 5 seconds, so total claimed should > 5
+        claimedAmount.should.be.greaterThan(5);
+
+        // but anyway we expect that it should not more than 10
+        claimedAmount.should.be.lessThan(10);
+      })
+
+      it("should subtract token from the vault equal to the claimed amount", async () => {
+        const finalClaimerTokenCount: anchor.BN = (
+          await mintAccount.getAccountInfo(employee1TokenAccount)
+        ).amount;
+
+        let claimedAmount = finalClaimerTokenCount.sub(initialClaimerTokenCount);
+
+        const finalVaultTokenCount: anchor.BN = (
+          await mintAccount.getAccountInfo(salaryVaultAccountPDA)
+        ).amount;
+
+        let subtractedAmount = initialVaultTokenCount.sub(finalVaultTokenCount);
+
+        claimedAmount.should.be.a.bignumber.that.equals(subtractedAmount)
+      })
+    })
+
+    describe("when claim from someone else", () => {
+      let claimerKeypair: anchor.web3.Keypair;
+      let claimerTokenAccount: anchor.web3.PublicKey;
+      let claimerSalaryStatePDA: anchor.web3.PublicKey;
+
+      before(async () => {
+        claimerKeypair = employee2Keypair;
+        claimerTokenAccount = employee2TokenAccount;
+        claimerSalaryStatePDA = employee2SalaryStatePDA;
+
+        //sleep for 5 seconds to wait for claimable amount
+        await sleep(5000);
+      });
+
+      it("should failed", async () => {
+        return program.rpc.claimSalary(
+          {
+            signers: [claimerKeypair],
+            accounts: {
+              claimer: claimerKeypair.publicKey,
+              salaryProgramSharedState: salaryProgramSharedStatePDA,
+              employeeTokenAccount: claimerTokenAccount,
+              vaultAccount: salaryVaultAccountPDA,
+              employeeSalaryState: claimerSalaryStatePDA,
+              vaultAuthority: salaryVaultAuthorityPDA,
+              tokenProgram: TOKEN_PROGRAM_ID
+            },
+          }
+        ).should.be.rejectedWith("The given account is not owned by the executing program");
+      });
+    })
+  })
 });
