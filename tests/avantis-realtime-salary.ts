@@ -16,16 +16,16 @@ function setUpTestRunner() {
 
 setUpTestRunner();
 
-const pdaSeed = {
-  SALARY_VAULT_ACCOUNT: "salary_vault_account",
-  SALARY_SHARED_STATE_ACCOUNT: "salary_shared_state_account",
-  SALARY_VAULT_AUTHORITY_ACCOUNT: "salary_vault_authority",
-};
-
 describe("avantis-realtime-salary", () => {
   anchor.setProvider(anchor.Provider.local());
 
   const program: anchor.Program = anchor.workspace.AvantisRealtimeSalary;
+
+  const pdaSeed = {
+    SALARY_VAULT_ACCOUNT: "salary_vault_account",
+    SALARY_SHARED_STATE_ACCOUNT: "salary_shared_state_account",
+    SALARY_VAULT_AUTHORITY_ACCOUNT: "salary_vault_authority",
+  };
 
   let mintAccountKeypair: anchor.web3.Keypair;
 
@@ -53,68 +53,6 @@ describe("avantis-realtime-salary", () => {
   let salaryVaultAuthorityPDABump: number;
 
   let mintAccount: Token;
-
-  async function findPdaAddress(seed: string) {
-    return anchor.web3.PublicKey.findProgramAddress(
-      [anchor.utils.bytes.utf8.encode(seed)],
-      program.programId
-    );
-  }
-
-  async function findEmployeeSalaryStateAddress(keypair: anchor.web3.Keypair) {
-    return anchor.web3.PublicKey.findProgramAddress(
-      [keypair.publicKey.toBuffer()],
-      program.programId
-    );
-  }
-
-  async function initAllPdaAddresses() {
-    [
-      [salaryVaultAccountPDA, salaryVaultAccountPDABump],
-      [salaryProgramSharedStatePDA, salaryProgramSharedStatePDABump],
-      [salaryVaultAuthorityPDA, salaryVaultAuthorityPDABump],
-    ] = await Promise.all(
-      [
-        pdaSeed.SALARY_VAULT_ACCOUNT,
-        pdaSeed.SALARY_SHARED_STATE_ACCOUNT,
-        pdaSeed.SALARY_VAULT_AUTHORITY_ACCOUNT,
-      ].map((seed) => findPdaAddress(seed))
-    );
-  }
-
-  async function initAllEmployeeAccounts() {
-    [
-      [employeeSalaryStatePDA, employeeSalaryStatePDABump],
-      [unknownPersonSalaryStatePDA, unknownPersonSalaryStatePDABump],
-    ] = await Promise.all(
-      [employeeKeypair, unknownPersonKeypair].map((keypair) =>
-        findEmployeeSalaryStateAddress(keypair)
-      )
-    );
-  }
-
-  async function initAllKeypairs() {
-    [
-      employerKeypair,
-      employeeKeypair,
-      unknownPersonKeypair,
-      mintAccountKeypair,
-    ] = times(anchor.web3.Keypair.generate, 4);
-  }
-
-  async function initAllTokenAccounts() {
-    [employerTokenAccount, employeeTokenAccount, unknownPersonTokenAccount] =
-      await Promise.all(
-        [employerKeypair, employeeKeypair, unknownPersonKeypair]
-          .map((keypair) => keypair.publicKey)
-          .map((publicKey) => mintAccount.createAccount(publicKey))
-      );
-  }
-
-  async function sleep(ms: number) {
-    console.log("Sleeping for", ms / 1000, "seconds");
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   describe("#initialize", () => {
     before(async () => {
@@ -340,7 +278,7 @@ describe("avantis-realtime-salary", () => {
         }).should.be.fulfilled;
       });
 
-      it("should give token to the claimer for an expectable amount", async () => {
+      it("should give token to the claimer for an expected amount", async () => {
         const finalClaimerTokenCount = (
           await mintAccount.getAccountInfo(employeeTokenAccount)
         ).amount;
@@ -410,4 +348,66 @@ describe("avantis-realtime-salary", () => {
       });
     });
   });
+
+  async function findPdaAddress(seed: string) {
+    return anchor.web3.PublicKey.findProgramAddress(
+      [anchor.utils.bytes.utf8.encode(seed)],
+      program.programId
+    );
+  }
+
+  async function findEmployeeSalaryStateAddress(keypair: anchor.web3.Keypair) {
+    return anchor.web3.PublicKey.findProgramAddress(
+      [keypair.publicKey.toBuffer()],
+      program.programId
+    );
+  }
+
+  async function initAllKeypairs() {
+    [
+      employerKeypair,
+      employeeKeypair,
+      unknownPersonKeypair,
+      mintAccountKeypair,
+    ] = times(anchor.web3.Keypair.generate, 4);
+  }
+
+  async function initAllTokenAccounts() {
+    [employerTokenAccount, employeeTokenAccount, unknownPersonTokenAccount] =
+      await Promise.all(
+        [employerKeypair, employeeKeypair, unknownPersonKeypair]
+          .map((keypair) => keypair.publicKey)
+          .map((publicKey) => mintAccount.createAccount(publicKey))
+      );
+  }
+
+  async function initAllPdaAddresses() {
+    [
+      [salaryVaultAccountPDA, salaryVaultAccountPDABump],
+      [salaryProgramSharedStatePDA, salaryProgramSharedStatePDABump],
+      [salaryVaultAuthorityPDA, salaryVaultAuthorityPDABump],
+    ] = await Promise.all(
+      [
+        pdaSeed.SALARY_VAULT_ACCOUNT,
+        pdaSeed.SALARY_SHARED_STATE_ACCOUNT,
+        pdaSeed.SALARY_VAULT_AUTHORITY_ACCOUNT,
+      ].map((seed) => findPdaAddress(seed))
+    );
+  }
+
+  async function initAllEmployeeAccounts() {
+    [
+      [employeeSalaryStatePDA, employeeSalaryStatePDABump],
+      [unknownPersonSalaryStatePDA, unknownPersonSalaryStatePDABump],
+    ] = await Promise.all(
+      [employeeKeypair, unknownPersonKeypair].map((keypair) =>
+        findEmployeeSalaryStateAddress(keypair)
+      )
+    );
+  }
+
+  async function sleep(ms: number) {
+    console.log("Sleeping for", ms / 1000, "seconds");
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 });
