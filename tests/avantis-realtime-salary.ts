@@ -5,10 +5,13 @@ import { times } from "ramda";
 
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
+import * as chaiBn from "chai-bn";
+import { Duration } from "luxon";
 
 function setUpTestRunner() {
   chai.should();
   chai.use(chaiAsPromised);
+  chai.use(chaiBn(anchor.BN));
 }
 
 setUpTestRunner();
@@ -29,11 +32,11 @@ describe("avantis-realtime-salary", () => {
   const initializerKeypair = anchor.web3.Keypair.generate();
 
   let salaryVaultAccountPDA: anchor.web3.PublicKey;
-  let programSharedStatePDA: anchor.web3.PublicKey;
+  let salaryProgramSharedStatePDA: anchor.web3.PublicKey;
   let salaryVaultAuthorityPDA: anchor.web3.PublicKey;
 
-  let employee1StatePDABump: number;
-  let employee2StatePDABump: number;
+  let employee1SalaryStatePDABump: number;
+  let employee2SalaryStatePDABump: number;
 
   let salaryVaultAccountPDABump: number;
   let salaryProgramSharedStatePDABump: number;
@@ -42,8 +45,8 @@ describe("avantis-realtime-salary", () => {
   let employee1Keypair: anchor.web3.Keypair;
   let employee2Keypair: anchor.web3.Keypair;
 
-  let employee1StatePDA: anchor.web3.PublicKey;
-  let employee2StatePDA: anchor.web3.PublicKey;
+  let employee1SalaryStatePDA: anchor.web3.PublicKey;
+  let employee2SalaryStatePDA: anchor.web3.PublicKey;
 
   let employee1TokenAccount: anchor.web3.PublicKey;
   let employee2TokenAccount: anchor.web3.PublicKey;
@@ -57,9 +60,9 @@ describe("avantis-realtime-salary", () => {
     );
   }
 
-  async function findAccountAddress(keypair: anchor.web3.Keypair) {
+  async function findEmployeeSalaryStateAddress(keypair: anchor.web3.Keypair) {
     return anchor.web3.PublicKey.findProgramAddress(
-      [employee1Keypair.publicKey.toBuffer()],
+      [keypair.publicKey.toBuffer()],
       program.programId
     );
   }
@@ -67,14 +70,14 @@ describe("avantis-realtime-salary", () => {
   async function initAllPdaAddresses() {
     [
       [salaryVaultAccountPDA, salaryVaultAccountPDABump],
-      [programSharedStatePDA, salaryProgramSharedStatePDABump],
+      [salaryProgramSharedStatePDA, salaryProgramSharedStatePDABump],
       [salaryVaultAuthorityPDA, salaryVaultAuthorityPDABump],
     ] = await Promise.all(
       [
         pdaSeed.SALARY_VAULT_ACCOUNT,
         pdaSeed.SALARY_SHARED_STATE_ACCOUNT,
         pdaSeed.SALARY_VAULT_AUTHORITY_ACCOUNT,
-      ].map(findPdaAddress)
+      ].map((seed) => findPdaAddress(seed))
     );
   }
 
@@ -85,10 +88,12 @@ describe("avantis-realtime-salary", () => {
     );
 
     [
-      [employee1StatePDA, employee1StatePDABump],
-      [employee2StatePDA, employee2StatePDABump],
+      [employee1SalaryStatePDA, employee1SalaryStatePDABump],
+      [employee2SalaryStatePDA, employee2SalaryStatePDABump],
     ] = await Promise.all(
-      [employee1Keypair, employee2Keypair].map(findAccountAddress)
+      [employee1Keypair, employee2Keypair].map((keypair) =>
+        findEmployeeSalaryStateAddress(keypair)
+      )
     );
 
     [employee1TokenAccount, employee2TokenAccount] = await Promise.all(
@@ -120,18 +125,31 @@ describe("avantis-realtime-salary", () => {
 
     await initAllPdaAddresses();
     await initAllEmployeeAccounts();
+
+    // console.log(`program: \n  ${program.programId.toString()}`);
+    // console.log(`salaryVaultAccountPDA: \n  ${salaryVaultAccountPDA.toString()}`);
+    // console.log(`salaryProgramSharedStatePDA: \n  ${salaryProgramSharedStatePDA.toString()}`);
+    // console.log(`salaryVaultAuthorityPDA: \n  ${salaryVaultAuthorityPDA.toString()}`);
+    // console.log(`employee1Keypair.pubkey: \n  ${employee1Keypair.publicKey.toString()}`);
+    // console.log(`employee2Keypair.pubkey: \n  ${employee2Keypair.publicKey.toString()}`);
+    // console.log(`employee1Keypair.secretkey: \n  ${employee1Keypair.secretKey.toString()}`);
+    // console.log(`employee2Keypair.secretkey: \n  ${employee2Keypair.secretKey.toString()}`);
+    // console.log(`employee1SalaryStatePDA: \n  ${employee1SalaryStatePDA.toString()}`);
+    // console.log(`employee2SalaryStatePDA: \n  ${employee2SalaryStatePDA.toString()}`);
+    // console.log(`employee1TokenAccount: \n  ${employee1TokenAccount.toString()}`);
+    // console.log(`employee2TokenAccount: \n  ${employee2TokenAccount.toString()}`);
   });
 
   describe("#initialize", () => {
     it("should be successful", async () => {
-      await program.rpc.initialize(
+      return program.rpc.initialize(
         salaryVaultAccountPDABump,
         salaryProgramSharedStatePDABump,
         {
           signers: [initializerKeypair],
           accounts: {
             initializer: initializerKeypair.publicKey,
-            salaryProgramSharedState: programSharedStatePDA,
+            salaryProgramSharedState: salaryProgramSharedStatePDA,
             vaultAccount: salaryVaultAccountPDA,
             tokenProgram: TOKEN_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -145,11 +163,11 @@ describe("avantis-realtime-salary", () => {
     it("should let the program own the salary vault", async () => {
       let salaryVault = await mintAccount.getAccountInfo(salaryVaultAccountPDA);
 
-      salaryVault.owner.should.deep.equals(salaryVaultAuthorityPDA);
+      salaryVault.owner.should.deep.equal(salaryVaultAuthorityPDA);
     });
 
     it("should fail if being called again", async () => {
-      program.rpc
+      return program.rpc
         .initialize(
           salaryVaultAccountPDABump,
           salaryProgramSharedStatePDABump,
@@ -157,7 +175,7 @@ describe("avantis-realtime-salary", () => {
             signers: [initializerKeypair],
             accounts: {
               initializer: initializerKeypair.publicKey,
-              salaryProgramSharedState: programSharedStatePDA,
+              salaryProgramSharedState: salaryProgramSharedStatePDA,
               vaultAccount: salaryVaultAccountPDA,
               tokenProgram: TOKEN_PROGRAM_ID,
               systemProgram: anchor.web3.SystemProgram.programId,
@@ -170,9 +188,40 @@ describe("avantis-realtime-salary", () => {
     });
   });
 
-  // describe("#addEmployee", () => {
-  //   describe("when add from employer", () => {
-  //     it("should be successful", async () => {});
-  //   });
-  // });
+  describe("#addEmployee", () => {
+    const secInDay = Duration.fromObject({ day: 1 }).as("second");
+    const oneTokenPerSecDailyRate: anchor.BN = new anchor.BN(1 * secInDay);
+
+    describe("when add from employer", () => {
+      it("should be successful", async () => {
+        return program.rpc.addEmployee(
+          oneTokenPerSecDailyRate,
+          employee1SalaryStatePDABump,
+          {
+            signers: [initializerKeypair],
+            accounts: {
+              adder: initializerKeypair.publicKey,
+              salaryProgramSharedState: salaryProgramSharedStatePDA,
+              employeeSalaryState: employee1SalaryStatePDA,
+              employeeTokenAccount: employee1TokenAccount,
+              employee: employee1Keypair.publicKey,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            },
+          }
+        ).should.eventually.fulfilled;
+      });
+
+      it("should have employee daily rate as expected", async () => {
+        let employee1SalaryStateAccount =
+          await program.account.employeeSalaryState.fetch(
+            employee1SalaryStatePDA
+          );
+
+        const dailyRate: anchor.BN = employee1SalaryStateAccount.dailyRate;
+
+        dailyRate.should.be.a.bignumber.that.equals(oneTokenPerSecDailyRate);
+      });
+    });
+  });
 });

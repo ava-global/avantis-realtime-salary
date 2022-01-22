@@ -550,6 +550,11 @@
   "resolved" "https://registry.npmjs.org/@types/lodash/-/lodash-4.14.176.tgz"
   "version" "4.14.176"
 
+"@types/luxon@^2.0.9":
+  "integrity" "sha512-ZuzIc7aN+i2ZDMWIiSmMdubR9EMMSTdEzF6R+FckP4p6xdnOYKqknTo/k+xXQvciSXlNGIwA4OPU5X7JIFzYdA=="
+  "resolved" "https://registry.npmjs.org/@types/luxon/-/luxon-2.0.9.tgz"
+  "version" "2.0.9"
+
 "@types/mocha@^9.1.0":
   "integrity" "sha512-QCWHkbMv4Y5U9oW10Uxbr45qMMSzl4OzijsozynUAgx3kEHUdXB00udx2dWDQ7f2TU2a2uuiFaRZjCe3unPpeg=="
   "resolved" "https://registry.npmjs.org/@types/mocha/-/mocha-9.1.0.tgz"
@@ -797,7 +802,12 @@
   dependencies:
     "check-error" "^1.0.2"
 
-"chai@^4.3.4", "chai@>= 2.1.2 < 5":
+"chai-bn@^0.3.0":
+  "integrity" "sha512-WsDnkmgcXUZVHarkENCA2DhGUs8M6zl6M6XxHrDTIq0DH4ZNDgHN63v7JJnNOQ+LVI/YwSob8eDwqDRW7cp3XQ=="
+  "resolved" "https://registry.npmjs.org/chai-bn/-/chai-bn-0.3.0.tgz"
+  "version" "0.3.0"
+
+"chai@^4.0.0", "chai@^4.3.4", "chai@>= 2.1.2 < 5":
   "integrity" "sha512-yS5H68VYOCtN1cjfwumDSuzn/9c+yza4f3reKXlE5rUg7SFcCEy90gJvydNgOYtblyf4Zi6jIWRnXOgErta0KA=="
   "resolved" "https://registry.npmjs.org/chai/-/chai-4.3.4.tgz"
   "version" "4.3.4"
@@ -1373,6 +1383,11 @@
   "version" "2.0.2"
   dependencies:
     "tslib" "^2.0.3"
+
+"luxon@^2.3.0":
+  "integrity" "sha512-gv6jZCV+gGIrVKhO90yrsn8qXPKD8HYZJtrUDSfEbow8Tkw84T9OnCyJhWvnJIaIF/tBuiAjZuQHUt1LddX2mg=="
+  "resolved" "https://registry.npmjs.org/luxon/-/luxon-2.3.0.tgz"
+  "version" "2.3.0"
 
 "make-error@^1.1.1":
   "integrity" "sha512-s8UhlNe7vPKomQhC1qFelMokr/Sc3AgNbso3n74mVPA5LTZwkB9NlXf4XPamLxJE8h0gh73rM94xvwRT2CVInw=="
