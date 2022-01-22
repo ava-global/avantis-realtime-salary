@@ -1,8 +1,16 @@
 import * as anchor from "@project-serum/anchor";
 import { TOKEN_PROGRAM_ID, Token } from "@solana/spl-token";
+import { SendTransactionError } from "@solana/web3.js";
 
 import * as chai from "chai";
-chai.should();
+import * as chaiAsPromised from "chai-as-promised";
+
+function setUpTestRunner() {
+  chai.should();
+  chai.use(chaiAsPromised);
+}
+
+setUpTestRunner();
 
 const pdaSeed = {
   SALARY_VAULT_ACCOUNT: "salary_vault_account",
@@ -19,6 +27,14 @@ describe("avantis-realtime-salary", () => {
   const initializerKeypair = anchor.web3.Keypair.generate();
   const employee1Keypair = anchor.web3.Keypair.generate();
   const employee2Keypair = anchor.web3.Keypair.generate();
+
+  let salaryVaultAccountPDA: anchor.web3.PublicKey;
+  let programSharedStatePDA: anchor.web3.PublicKey;
+  let salaryVaultAuthorityPDA: anchor.web3.PublicKey;
+
+  let salaryVaultAccountPDABump: number;
+  let salaryProgramSharedStatePDABump: number;
+  let salaryVaultAuthorityPDABump: number;
 
   let mintAccount: Token
 
@@ -47,6 +63,16 @@ describe("avantis-realtime-salary", () => {
       "confirmed"
     );
 
+    [
+      [salaryVaultAccountPDA, salaryVaultAccountPDABump],
+      [programSharedStatePDA, salaryProgramSharedStatePDABump],
+      [salaryVaultAuthorityPDA, salaryVaultAuthorityPDABump],
+    ] = await Promise.all([
+      pdaSeed.SALARY_VAULT_ACCOUNT,
+      pdaSeed.SALARY_SHARED_STATE_ACCOUNT,
+      pdaSeed.SALARY_VAULT_AUTHORITY_ACCOUNT,
+    ].map(findPdaAddress));
+
     mintAccount = await Token.createMint(
       anchor.getProvider().connection,
       initializerKeypair,
@@ -58,25 +84,7 @@ describe("avantis-realtime-salary", () => {
   })
 
   describe("#initialize", () => {
-    let salaryVaultAccountPDA: anchor.web3.PublicKey;
-    let programSharedStatePDA: anchor.web3.PublicKey;
-    let salaryVaultAuthorityPDA: anchor.web3.PublicKey;
-
     before(async () => {
-      let salaryVaultAccountPDABump: number;
-      let salaryProgramSharedStatePDABump: number;
-      let _: number;
-
-      [
-        [salaryVaultAccountPDA, salaryVaultAccountPDABump],
-        [programSharedStatePDA, salaryProgramSharedStatePDABump],
-        [salaryVaultAuthorityPDA, _],
-      ] = await Promise.all([
-        pdaSeed.SALARY_VAULT_ACCOUNT,
-        pdaSeed.SALARY_SHARED_STATE_ACCOUNT,
-        pdaSeed.SALARY_VAULT_AUTHORITY_ACCOUNT,
-      ].map(findPdaAddress));
-  
       await program.rpc.initialize(
         salaryVaultAccountPDABump,
         salaryProgramSharedStatePDABump,
@@ -99,6 +107,25 @@ describe("avantis-realtime-salary", () => {
       let salaryVault = await mintAccount.getAccountInfo(salaryVaultAccountPDA);
   
       salaryVault.owner.should.deep.equals(salaryVaultAuthorityPDA);
+    });
+
+    it("can't be initialize again", async () => {
+      program.rpc.initialize(
+        salaryVaultAccountPDABump,
+        salaryProgramSharedStatePDABump,
+        {
+          signers: [initializerKeypair],
+          accounts: {
+            initializer: initializerKeypair.publicKey,
+            salaryProgramSharedState: programSharedStatePDA,
+            vaultAccount: salaryVaultAccountPDA,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            mint: mintAccount.publicKey,
+          },
+        }
+      ).should.to.be.rejectedWith(SendTransactionError);
     });
   })
 });
