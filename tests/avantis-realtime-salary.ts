@@ -116,36 +116,36 @@ describe("avantis-realtime-salary", () => {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  before(async () => {
-    await initAllKeypairs();
-
-    const provider = anchor.getProvider();
-
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(
-        employerKeypair.publicKey,
-        10_000_000_000
-      ),
-      "confirmed"
-    );
-
-    mintAccount = await Token.createMint(
-      provider.connection,
-      employerKeypair,
-      mintAccountKeypair.publicKey,
-      null,
-      0,
-      TOKEN_PROGRAM_ID
-    );
-
-    await initAllTokenAccounts();
-
-    await initAllPdaAddresses();
-    await initAllEmployeeAccounts();
-  });
-
   describe("#initialize", () => {
-    it("should be successful", async () => {
+    before(async () => {
+      await initAllKeypairs();
+
+      const provider = anchor.getProvider();
+
+      await provider.connection.confirmTransaction(
+        await provider.connection.requestAirdrop(
+          employerKeypair.publicKey,
+          10_000_000_000
+        ),
+        "confirmed"
+      );
+
+      mintAccount = await Token.createMint(
+        provider.connection,
+        employerKeypair,
+        mintAccountKeypair.publicKey,
+        null,
+        0,
+        TOKEN_PROGRAM_ID
+      );
+
+      await initAllTokenAccounts();
+
+      await initAllPdaAddresses();
+      await initAllEmployeeAccounts();
+    });
+
+    it("should succeed", async () => {
       return program.rpc.initialize(
         salaryVaultAccountPDABump,
         salaryProgramSharedStatePDABump,
@@ -197,7 +197,7 @@ describe("avantis-realtime-salary", () => {
     const oneTokenPerSecDailyRate: anchor.BN = new anchor.BN(1 * secInDay);
 
     describe("when add from employer", () => {
-      it("should be successful", async () => {
+      it("should succeed", async () => {
         return program.rpc.addEmployee(
           oneTokenPerSecDailyRate,
           employeeSalaryStatePDABump,
@@ -229,7 +229,7 @@ describe("avantis-realtime-salary", () => {
     });
 
     describe("when add from someone else", () => {
-      it("should failed", async () => {
+      it("should fail", async () => {
         return program.rpc
           .addEmployee(
             oneTokenPerSecDailyRate,
@@ -275,7 +275,7 @@ describe("avantis-realtime-salary", () => {
         ).amount;
       });
 
-      it("should be successful", async () => {
+      it("should succeed", async () => {
         return program.rpc.depositToVault(new anchor.BN(depositAmount), {
           signers: [depositorKeypair],
           accounts: {
@@ -325,7 +325,7 @@ describe("avantis-realtime-salary", () => {
         await sleep(5000);
       });
 
-      it("should be successful", async () => {
+      it("should succeed", async () => {
         return program.rpc.claimSalary({
           signers: [claimerKeypair],
           accounts: {
@@ -390,7 +390,7 @@ describe("avantis-realtime-salary", () => {
         await sleep(5000);
       });
 
-      it("should failed", async () => {
+      it("should fail", async () => {
         return program.rpc
           .claimSalary({
             signers: [claimerKeypair],
