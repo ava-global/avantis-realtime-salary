@@ -1,6 +1,6 @@
 import * as anchor from "@project-serum/anchor";
 import { TOKEN_PROGRAM_ID, Token } from "@solana/spl-token";
-import { SendTransactionError } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, SendTransactionError } from "@solana/web3.js";
 import { times } from "ramda";
 
 import * as chai from "chai";
@@ -63,7 +63,7 @@ describe("avantis-realtime-salary", () => {
       await provider.connection.confirmTransaction(
         await provider.connection.requestAirdrop(
           employerKeypair.publicKey,
-          10_000_000_000
+          10 * LAMPORTS_PER_SOL
         ),
         "confirmed"
       );
