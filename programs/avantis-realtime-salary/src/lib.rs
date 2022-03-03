@@ -150,6 +150,7 @@ pub struct AddEmployee<'info> {
     )]
     pub employee_salary_state: Account<'info, EmployeeSalaryState>,
     pub employee_token_account: Account<'info, TokenAccount>,
+    /// CHECK: we don'nt need to check this employee
     pub employee: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
