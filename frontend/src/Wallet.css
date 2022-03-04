@@ -1,0 +1,7 @@
+.connect-wallet-wrapper {
+    display: flex;
+    flex-direction: row;
+    width: 500px;
+    padding: 20px;
+    justify-content: space-between;
+}
