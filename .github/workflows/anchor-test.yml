@@ -54,7 +54,7 @@ jobs:
       run: npm install -g mocha
       
     - name: install anchor
-      run: npm i -g @project-serum/anchor-cli
+      run: npm i -g @project-serum/anchor-cli@0.20.1
       
     - name: install yarn 
       run: npm install -g yarn
