@@ -14,12 +14,17 @@ pub mod avantis_realtime_salary {
         ctx: Context<Initialize>,
         _salary_vault_account_bump: u8,
         _salary_shared_state_account_bump: u8,
+        exchange_rate: u128,
     ) -> ProgramResult {
         // Initialize pool shared account value
         ctx.accounts.salary_program_shared_state.initializer_pubkey = *ctx.accounts.initializer.key;
         ctx.accounts
             .salary_program_shared_state
             .vault_account_pubkey = *ctx.accounts.vault_account.to_account_info().key;
+        ctx.accounts
+            .salary_program_shared_state.total_salary = 0 as u128;
+        ctx.accounts.salary_program_shared_state.exchange_rate = exchange_rate;
+        ctx.accounts.salary_program_shared_state.last_updated_timestamp = Clock::get().unwrap().unix_timestamp;
 
         // Transfer ownership of Salary's Vault to program
         let (salary_vault_authority, _bump) =
@@ -29,39 +34,98 @@ pub mod avantis_realtime_salary {
             ctx.accounts.into_set_authority_context(),
             AuthorityType::AccountOwner,
             Some(salary_vault_authority),
-        )?;
+        ).unwrap();
         Ok(())
     }
 
-    pub fn add_employee(ctx: Context<AddEmployee>, daily_rate: u64, _bump: u8) -> ProgramResult {
+    pub fn update_exchange_rate(
+        ctx: Context<Initialize>,
+        exchange_rate: u128,
+    ) -> ProgramResult {
+        let current_timestamp = Clock::get().unwrap().unix_timestamp;
+        let accumulated_salary_per_share= calculate_accumulated_salary_per_share(
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.total_salary as u128).unwrap(),
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.last_updated_timestamp as u128).unwrap(),
+            PreciseNumber::new(current_timestamp as u128).unwrap(),
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.exchange_rate).unwrap(),
+        );
+        ctx.accounts.salary_program_shared_state.accumulated_salary_per_share = accumulated_salary_per_share.to_imprecise().unwrap();
+        ctx.accounts.salary_program_shared_state.exchange_rate = exchange_rate;
+        ctx.accounts.salary_program_shared_state.last_updated_timestamp = current_timestamp;
+
+        // Transfer ownership of Salary's Vault to program
+        let (salary_vault_authority, _bump) =
+            Pubkey::find_program_address(&[SALARY_VAULT_PDA_SEED], ctx.program_id);
+
+        token::set_authority(
+            ctx.accounts.into_set_authority_context(),
+            AuthorityType::AccountOwner,
+            Some(salary_vault_authority),
+        ).unwrap();
+        Ok(())
+    }
+
+    pub fn add_employee(ctx: Context<AddEmployee>, salary_rate_thb: u128, _bump: u8) -> ProgramResult {
+        let current_timestamp = Clock::get().unwrap().unix_timestamp;
+        let accumulated_salary_per_share= calculate_accumulated_salary_per_share(
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.total_salary as u128).unwrap(),
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.last_updated_timestamp as u128).unwrap(),
+            PreciseNumber::new(current_timestamp as u128).unwrap(),
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.exchange_rate).unwrap(),
+        );
+
+        ctx.accounts.salary_program_shared_state.accumulated_salary_per_share = accumulated_salary_per_share.to_imprecise().unwrap();
+        ctx.accounts.salary_program_shared_state.last_updated_timestamp = current_timestamp;
+
+        ctx.accounts.salary_program_shared_state.total_salary += salary_rate_thb;
+
         ctx.accounts
             .employee_salary_state
             .salary_vault_account_pubkey = ctx
             .accounts
             .salary_program_shared_state
             .vault_account_pubkey;
-        ctx.accounts.employee_salary_state.daily_rate = daily_rate;
+        ctx.accounts.employee_salary_state.salary_rate_thb = salary_rate_thb;
+        ctx.accounts.employee_salary_state.salary_debt = PreciseNumber::new(salary_rate_thb).unwrap()
+            .checked_mul(&PreciseNumber::new(ctx.accounts.salary_program_shared_state.accumulated_salary_per_share).unwrap()).unwrap()
+            .to_imprecise().unwrap();
+
         ctx.accounts.employee_salary_state.employee_pubkey = *ctx.accounts.employee.key;
         ctx.accounts
             .employee_salary_state
             .employee_token_account_pubkey = ctx.accounts.employee_token_account.key();
-        ctx.accounts.employee_salary_state.last_claimed_timestamp = Clock::get()?.unix_timestamp;
+        ctx.accounts.employee_salary_state.last_claimed_timestamp = current_timestamp;
 
         Ok(())
     }
 
     pub fn claim_salary(ctx: Context<ClaimSalary>) -> ProgramResult {
-        let claimer_salary_state = &mut ctx.accounts.employee_salary_state;
-        let now = Clock::get()?.unix_timestamp;
-
-        let claimable_amount = calculate_claimable_amount(
-            PreciseNumber::new(claimer_salary_state.daily_rate as u128).unwrap(),
-            PreciseNumber::new(claimer_salary_state.last_claimed_timestamp as u128).unwrap(),
-            PreciseNumber::new(now as u128).unwrap(),
+        let current_timestamp = Clock::get().unwrap().unix_timestamp;
+        let accumulated_salary_per_share_since_latest = calculate_accumulated_salary_per_share(
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.total_salary as u128).unwrap(),
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.last_updated_timestamp as u128).unwrap(),
+            PreciseNumber::new(current_timestamp as u128).unwrap(),
+            PreciseNumber::new(ctx.accounts.salary_program_shared_state.exchange_rate).unwrap(),
         );
+        let accumulated_salary_per_share = accumulated_salary_per_share_since_latest
+            .checked_add(&PreciseNumber::new(ctx.accounts.salary_program_shared_state.accumulated_salary_per_share).unwrap()).unwrap();
+
+        ctx.accounts.salary_program_shared_state.accumulated_salary_per_share = accumulated_salary_per_share.to_imprecise().unwrap();
+        ctx.accounts.salary_program_shared_state.last_updated_timestamp = current_timestamp;
+
+        let claimer_salary_state = &mut ctx.accounts.employee_salary_state;
+        let current_timestamp = Clock::get().unwrap().unix_timestamp;
+
+        let claimable_amount = PreciseNumber::new(claimer_salary_state.salary_rate_thb).unwrap()
+            .checked_mul(&accumulated_salary_per_share).unwrap()
+            .checked_sub(&PreciseNumber::new(claimer_salary_state.salary_debt).unwrap()).unwrap();
 
         // after calculate claimable amount , then reset last claimed timestamp to now.
-        claimer_salary_state.last_claimed_timestamp = now;
+        claimer_salary_state.last_claimed_timestamp = current_timestamp;
+
+        claimer_salary_state.salary_debt = PreciseNumber::new(claimer_salary_state.salary_debt).unwrap()
+            .checked_add(&claimable_amount).unwrap()
+            .to_imprecise().unwrap();
 
         let (_vault_authority, vault_authority_bump) =
             Pubkey::find_program_address(&[SALARY_VAULT_PDA_SEED], ctx.program_id);
@@ -72,7 +136,7 @@ pub mod avantis_realtime_salary {
                 .into_transfer_to_claimer_context()
                 .with_signer(&[&vault_authority_seed[..]]),
             claimable_amount.to_imprecise().unwrap() as u64,
-        )?;
+        ).unwrap();
 
         Ok(())
     }
@@ -82,7 +146,7 @@ pub mod avantis_realtime_salary {
         token::transfer(
             ctx.accounts.into_transfer_to_vault_context(),
             deposit_amount,
-        )?;
+        ).unwrap();
         Ok(())
     }
 }
@@ -115,10 +179,25 @@ pub struct Initialize<'info> {
     pub mint: Account<'info, Mint>,
 }
 
+#[derive(Accounts)]
+pub struct UpdateExchangeRate<'info> {
+    #[account(mut)]
+    pub initializer: Signer<'info>,
+    #[account(mut)]
+    pub salary_program_shared_state: Account<'info, SalaryProgramSharedState>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+    pub mint: Account<'info, Mint>,
+}
+
 #[account]
 pub struct SalaryProgramSharedState {
     pub initializer_pubkey: Pubkey,
     pub vault_account_pubkey: Pubkey,
+    pub total_salary: u128,
+    pub exchange_rate: u128,
+    pub accumulated_salary_per_share: u128,
+    pub last_updated_timestamp: i64,
 }
 
 impl<'info> Initialize<'info> {
@@ -150,7 +229,7 @@ pub struct AddEmployee<'info> {
     )]
     pub employee_salary_state: Account<'info, EmployeeSalaryState>,
     pub employee_token_account: Account<'info, TokenAccount>,
-    /// CHECK: we don'nt need to check this employee
+    /// CHECK: we dont need to check this employee
     pub employee: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
@@ -161,13 +240,15 @@ pub struct EmployeeSalaryState {
     pub salary_vault_account_pubkey: Pubkey,
     pub employee_pubkey: Pubkey,
     pub employee_token_account_pubkey: Pubkey,
-    pub daily_rate: u64,
+    pub salary_rate_thb: u128,
+    pub salary_debt: u128,
     pub last_claimed_timestamp: i64,
 }
 
 #[derive(Accounts)]
 pub struct ClaimSalary<'info> {
     pub claimer: Signer<'info>,
+    #[account(mut)]
     pub salary_program_shared_state: Account<'info, SalaryProgramSharedState>,
     #[account(mut)]
     pub employee_token_account: Account<'info, TokenAccount>,
@@ -197,15 +278,16 @@ impl<'info> ClaimSalary<'info> {
     }
 }
 
-pub fn calculate_claimable_amount(
-    daily_rate: PreciseNumber,
+pub fn calculate_accumulated_salary_per_share(
+    total_salary_thb: PreciseNumber,
     last_claimed_timestamp: PreciseNumber,
     now: PreciseNumber,
+    exchange_rate: PreciseNumber,
 ) -> PreciseNumber {
     let sec_diff = now.checked_sub(&last_claimed_timestamp).unwrap();
     let day = PreciseNumber::new(24 * 60 * 60).unwrap();
-    let amount_per_sec = daily_rate.checked_div(&day).unwrap();
-    sec_diff.checked_mul(&amount_per_sec).unwrap()
+    let amount_usd_per_sec = total_salary_thb.checked_div(&day).unwrap().checked_div(&exchange_rate).unwrap();
+    sec_diff.checked_mul(&amount_usd_per_sec).unwrap().checked_div(&total_salary_thb).unwrap()
 }
 
 #[derive(Accounts)]
